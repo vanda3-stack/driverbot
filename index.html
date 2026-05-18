@@ -36,7 +36,7 @@ body{
 }
 
 .robot-info{
-    font-size:26px;
+    font-size:24px;
     font-weight:bold;
 }
 
@@ -44,13 +44,14 @@ body{
     font-size:16px;
     color:#f87171;
     font-weight:bold;
+    text-align:center;
 }
 
 .connect-btn{
     background:#2563eb;
     color:white;
     border:none;
-    padding:12px 22px;
+    padding:12px 20px;
     border-radius:18px;
     font-size:16px;
     font-weight:bold;
@@ -62,7 +63,7 @@ body{
     transform:scale(0.95);
 }
 
-/* ===== MAIN ===== */
+/* ===== MAIN LAYOUT ===== */
 
 .gamepad-layout{
     height:calc(100vh - 70px);
@@ -72,7 +73,7 @@ body{
     padding:20px;
 }
 
-/* ===== LEFT CONTROLLER ===== */
+/* ===== DIRECTION CONTROL ===== */
 
 .controller{
     display:grid;
@@ -86,10 +87,10 @@ body{
     border-radius:30px;
     background:#1e293b;
     color:white;
-    font-size:40px;
+    font-size:42px;
     font-weight:bold;
-    box-shadow:0 6px 12px rgba(0,0,0,0.5);
     cursor:pointer;
+    box-shadow:0 6px 12px rgba(0,0,0,0.5);
 }
 
 .move-btn:active{
@@ -123,7 +124,7 @@ body{
     grid-row:3;
 }
 
-/* ===== RIGHT SERVO ===== */
+/* ===== SERVO ===== */
 
 .servo-panel{
     display:flex;
@@ -157,15 +158,9 @@ body{
     transform:scale(0.92);
 }
 
-/* ===== RESPONSIVE ===== */
+/* ===== MOBILE ===== */
 
 @media (max-width:900px){
-
-    .gamepad-layout{
-        flex-direction:row;
-        align-items:center;
-        justify-content:space-between;
-    }
 
     .controller{
         transform:scale(0.82);
@@ -187,23 +182,23 @@ body{
         font-size:18px;
     }
 
+    .status{
+        font-size:12px;
+    }
+
     .connect-btn{
         padding:10px 14px;
         font-size:14px;
     }
 
-    .status{
-        font-size:13px;
-    }
-
     .controller{
-        transform:scale(0.72);
-        margin-left:-20px;
+        transform:scale(0.70);
+        margin-left:-25px;
     }
 
     .servo-panel{
-        transform:scale(0.72);
-        margin-right:-20px;
+        transform:scale(0.70);
+        margin-right:-25px;
     }
 
 }
@@ -306,58 +301,102 @@ body{
 let bluetoothDevice;
 let uartCharacteristic;
 
-// ===== BLUETOOTH =====
+// ===== UUID UART MICROBIT =====
+
+const UART_SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const UART_TX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+
+// ===== KẾT NỐI BLUETOOTH =====
 
 async function connectBluetooth(){
 
     try{
 
+        document.getElementById("status").innerHTML =
+            "🟡 Đang tìm micro:bit...";
+
+        // ===== QUÉT BLUETOOTH =====
+
         bluetoothDevice = await navigator.bluetooth.requestDevice({
-            filters:[
-                { namePrefix: "BBC micro:bit" }
-            ],
-            optionalServices:[
-                '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-            ]
+
+            acceptAllDevices: true,
+
+            optionalServices: [UART_SERVICE]
+
         });
+
+        // ===== KẾT NỐI =====
 
         const server = await bluetoothDevice.gatt.connect();
 
-        const service = await server.getPrimaryService(
-            '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-        );
+        // ===== UART SERVICE =====
 
-        uartCharacteristic = await service.getCharacteristic(
-            '6e400002-b5a3-f393-e0a9-e50e24dcca9e'
-        );
+        const service = await server.getPrimaryService(UART_SERVICE);
+
+        // ===== UART CHARACTERISTIC =====
+
+        uartCharacteristic = await service.getCharacteristic(UART_TX);
+
+        // ===== HIỂN THỊ TÊN THIẾT BỊ =====
 
         document.getElementById("status").innerHTML =
-            "🟢 Đã kết nối";
+            "🟢 " + bluetoothDevice.name;
+
+        // ===== TỰ ĐỘNG KHI MẤT KẾT NỐI =====
+
+        bluetoothDevice.addEventListener(
+            'gattserverdisconnected',
+            onDisconnected
+        );
 
     }catch(error){
 
-        alert("Không thể kết nối Bluetooth");
         console.log(error);
+
+        document.getElementById("status").innerHTML =
+            "🔴 Chưa kết nối";
+
+        alert(
+            "Không thể kết nối Bluetooth.\n\n" +
+            "Hãy kiểm tra:\n" +
+            "- Đã bật Bluetooth\n" +
+            "- Đã bật GPS/Vị trí\n" +
+            "- Đang dùng Chrome hoặc Bluefy"
+        );
 
     }
 
 }
 
-// ===== SEND COMMAND =====
+// ===== MẤT KẾT NỐI =====
+
+function onDisconnected(){
+
+    document.getElementById("status").innerHTML =
+        "🔴 Mất kết nối";
+
+}
+
+// ===== GỬI LỆNH =====
 
 async function sendCommand(command){
 
     if(!uartCharacteristic){
-        alert("Chưa kết nối Microbit");
+
+        alert("Chưa kết nối micro:bit");
+
         return;
     }
 
-    let encoder = new TextEncoder();
-    let data = encoder.encode(command + "#");
-
     try{
 
+        let encoder = new TextEncoder();
+
+        let data = encoder.encode(command + "#");
+
         await uartCharacteristic.writeValue(data);
+
+        console.log("Đã gửi:", command);
 
     }catch(error){
 
@@ -367,21 +406,31 @@ async function sendCommand(command){
 
 }
 
-// ===== HOLD BUTTON =====
+// ===== GIỮ NÚT =====
 
 function startCommand(command){
+
     sendCommand(command);
+
 }
+
+// ===== NHẢ NÚT =====
 
 function stopCommand(){
+
     sendCommand("dung");
+
 }
 
-// ===== PREVENT SCROLL =====
+// ===== CHỐNG SCROLL MOBILE =====
 
-document.body.addEventListener('touchmove', function(e) {
-    e.preventDefault();
-}, { passive: false });
+document.body.addEventListener(
+    'touchmove',
+    function(e){
+        e.preventDefault();
+    },
+    { passive:false }
+);
 
 </script>
 
