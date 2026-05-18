@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Robot Microbit Controller</title>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial, sans-serif;
+}
+
+body{
+    background:#111827;
+    color:white;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+}
+
+h1{
+    margin-bottom:20px;
+    text-align:center;
+    font-size:32px;
+}
+
+.status{
+    margin-bottom:20px;
+    color:#34d399;
+    font-size:18px;
+}
+
+.connect-btn{
+    background:#2563eb;
+    color:white;
+    border:none;
+    padding:15px 30px;
+    border-radius:20px;
+    font-size:18px;
+    font-weight:bold;
+    cursor:pointer;
+    margin-bottom:30px;
+}
+
+.main-layout{
+    display:flex;
+    gap:40px;
+    justify-content:center;
+    align-items:flex-start;
+    flex-wrap:wrap;
+}
+
+.control-box{
+    background:#1f2937;
+    padding:20px;
+    border-radius:25px;
+    box-shadow:0 0 20px rgba(0,0,0,0.4);
+}
+
+.control-box h2{
+    text-align:center;
+    margin-bottom:20px;
+}
+
+button{
+    border:none;
+    border-radius:20px;
+    color:white;
+    cursor:pointer;
+    transition:0.15s;
+    user-select:none;
+}
+
+button:active{
+    transform:scale(0.92);
+}
+
+/* ===== DI CHUYỂN ===== */
+
+.controller{
+    display:grid;
+    grid-template-columns:100px 100px 100px;
+    grid-template-rows:100px 100px 100px;
+    gap:15px;
+}
+
+.move-btn{
+    background:#374151;
+    font-size:35px;
+    font-weight:bold;
+}
+
+.forward{
+    grid-column:2;
+    grid-row:1;
+}
+
+.left{
+    grid-column:1;
+    grid-row:2;
+}
+
+.stop{
+    grid-column:2;
+    grid-row:2;
+    background:#dc2626;
+}
+
+.right{
+    grid-column:3;
+    grid-row:2;
+}
+
+.backward{
+    grid-column:2;
+    grid-row:3;
+}
+
+/* ===== SERVO ===== */
+
+.servo-controller{
+    display:grid;
+    grid-template-columns:100px;
+    grid-template-rows:100px 100px 100px;
+    gap:15px;
+}
+
+.servo-arrow{
+    background:#10b981;
+    font-size:35px;
+    font-weight:bold;
+}
+
+.servo-stop{
+    background:#f59e0b;
+    font-size:35px;
+    font-weight:bold;
+}
+
+/* ===== MOBILE ===== */
+
+@media (max-width:768px){
+
+    body{
+        justify-content:flex-start;
+        padding-top:20px;
+    }
+
+    .main-layout{
+        gap:20px;
+    }
+
+    .controller{
+        transform:scale(0.9);
+    }
+
+    .servo-controller{
+        transform:scale(0.9);
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>🤖 Robot Controller</h1>
+
+<button class="connect-btn" onclick="connectBluetooth()">
+    Kết nối Bluetooth
+</button>
+
+<div class="status" id="status">
+    Chưa kết nối
+</div>
+
+<div class="main-layout">
+
+    <!-- ===== BÊN TRÁI ===== -->
+
+    <div class="control-box">
+
+        <h2>🚗 Di Chuyển</h2>
+
+        <div class="controller">
+
+            <button class="move-btn forward"
+                onmousedown="sendCommand('tien')"
+                ontouchstart="sendCommand('tien')">
+                ↑
+            </button>
+
+            <button class="move-btn left"
+                onmousedown="sendCommand('trai')"
+                ontouchstart="sendCommand('trai')">
+                ←
+            </button>
+
+            <button class="move-btn stop"
+                onclick="sendCommand('dung')">
+                ■
+            </button>
+
+            <button class="move-btn right"
+                onmousedown="sendCommand('phai')"
+                ontouchstart="sendCommand('phai')">
+                →
+            </button>
+
+            <button class="move-btn backward"
+                onmousedown="sendCommand('lui')"
+                ontouchstart="sendCommand('lui')">
+                ↓
+            </button>
+
+        </div>
+
+    </div>
+
+    <!-- ===== BÊN PHẢI ===== -->
+
+    <div class="control-box">
+
+        <h2>🦾 Servo</h2>
+
+        <div class="servo-controller">
+
+            <button class="servo-arrow"
+                onclick="sendCommand('len')">
+                ↑
+            </button>
+
+            <button class="servo-stop"
+                onclick="sendCommand('dungservo')">
+                ■
+            </button>
+
+            <button class="servo-arrow"
+                onclick="sendCommand('xuong')">
+                ↓
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+let bluetoothDevice;
+let uartCharacteristic;
+
+// ===== KẾT NỐI BLUETOOTH =====
+
+async function connectBluetooth(){
+
+    try{
+
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+            filters:[
+                { namePrefix: "BBC micro:bit" }
+            ],
+            optionalServices:[
+                '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+            ]
+        });
+
+        const server = await bluetoothDevice.gatt.connect();
+
+        const service = await server.getPrimaryService(
+            '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+        );
+
+        uartCharacteristic = await service.getCharacteristic(
+            '6e400002-b5a3-f393-e0a9-e50e24dcca9e'
+        );
+
+        document.getElementById("status").innerHTML =
+            "✅ Đã kết nối Microbit";
+
+    }catch(error){
+
+        alert("Không thể kết nối Bluetooth");
+        console.log(error);
+
+    }
+
+}
+
+// ===== GỬI LỆNH =====
+
+async function sendCommand(command){
+
+    if(!uartCharacteristic){
+        alert("Chưa kết nối Microbit");
+        return;
+    }
+
+    let encoder = new TextEncoder();
+    let data = encoder.encode(command + "#");
+
+    try{
+
+        await uartCharacteristic.writeValue(data);
+        console.log("Đã gửi:", command);
+
+    }catch(error){
+
+        console.log(error);
+
+    }
+
+}
+
+// ===== TỰ DỪNG KHI NHẢ NÚT =====
+
+document.querySelectorAll(".move-btn").forEach(btn=>{
+
+    btn.addEventListener("mouseup", ()=>{
+        sendCommand("dung");
+    });
+
+    btn.addEventListener("touchend", ()=>{
+        sendCommand("dung");
+    });
+
+});
+
+</script>
+
+</body>
+</html>
